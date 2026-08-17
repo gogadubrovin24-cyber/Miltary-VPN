@@ -2,12 +2,11 @@ name: Обновление конфигов Miltary VPN
 
 on:
   schedule:
-    # Запуск каждый час
     - cron: '0 * * * *'
-  workflow_dispatch:  # Возможность ручного запуска
+  workflow_dispatch:
   push:
     paths:
-      - 'pp2.py'  # Запускать при изменении основного скрипта
+      - 'pp2.py'
 
 permissions:
   contents: write
@@ -15,36 +14,27 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Проверка репозитория
-        uses: actions/checkout@v4
-
-      - name: Установка Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
         with:
           python-version: '3.10'
-
       - name: Установка зависимостей
         run: |
           python -m pip install --upgrade pip
           pip install requests urllib3 pyyaml maxminddb
-
       - name: Восстановление кэша MaxMind DB
         uses: actions/cache@v3
         id: cache-mmdb
         with:
           path: temp/GeoLite2-Country.mmdb
           key: mmdb-${{ runner.os }}-latest
-          restore-keys: |
-            mmdb-${{ runner.os }}-
-
+      - name: Создание папки temp (если нет)
+        run: mkdir -p temp
       - name: Запуск скрипта
         run: python pp2.py
         env:
-          # При необходимости можно передать переменные окружения
           PYTHONUNBUFFERED: 1
-
       - name: Коммит и пуш изменений
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
@@ -57,4 +47,3 @@ jobs:
             temp/GeoLite2-Country.mmdb
           commit_user_name: "GitHub Actions Bot"
           commit_user_email: "actions@github.com"
-          commit_author: "GitHub Actions Bot <actions@github.com>"
