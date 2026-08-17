@@ -67,7 +67,7 @@ SOURCES_MAIN = [
 ]
 
 SOURCES_HAPP_CRYPT = []
-SOURCES_INCY_CRYPT = []
+SOURCES_INCY_CRYPT = [incy://crypt1/Bi8Q3qzhqPjOMeh3efRklU_z9tTymzSmkKwMJMVOyaLPDoCoCQKbyWGiTwAgkaKZnmtZQkPehhBgp2laB6lFlFzTbOhC3HZb48gEcyMaUkDACc2P5nCO]
 SOURCES_HAPP_ADD = []
 SOURCES_INCY_ADD = []
 
@@ -108,6 +108,38 @@ USER_AGENTS = [
     "Incy/2.0.0/Android",
     "v2raytun/1.0.0"
 ]
+
+# ===================== ФИЛЬТРАЦИЯ АРАБСКИХ/ИНДИЙСКИХ КОНФИГОВ =====================
+ARAB_COUNTRIES = {
+    'AE', 'SA', 'QA', 'KW', 'BH', 'OM', 'YE', 'JO', 'LB', 'SY', 'IQ', 'PS',
+    'EG', 'DZ', 'TN', 'MA', 'LY', 'SD', 'SO', 'MR', 'DJ', 'ER', 'IL', 'IR',
+    'SA', 'KW', 'QA', 'AE', 'BH', 'OM', 'JO', 'LB', 'SY', 'PS', 'EG', 'DZ',
+    'TN', 'MA', 'LY', 'SD', 'SO', 'MR', 'DJ'
+}
+INDIA_CODE = 'IN'
+
+def is_arabic_or_indian_name(text: str) -> bool:
+    """Проверяет, содержит ли текст арабские символы или индийские/арабские ключевые слова."""
+    if not text:
+        return False
+    # Арабские символы
+    arabic_pattern = re.compile(r'[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]')
+    if arabic_pattern.search(text):
+        return True
+    # Ключевые слова
+    keywords = ['iran', 'iraq', 'arab', 'saudi', 'uae', 'dubai', 'india', 'bharat', 'persian', 'tehran', 'riyadh']
+    low = text.lower()
+    for kw in keywords:
+        if kw in low:
+            return True
+    return False
+
+def is_arabic_or_indian_country(code: str) -> bool:
+    """Проверяет, является ли код страны арабским или индийским."""
+    if not code:
+        return False
+    code = code.upper()
+    return code in ARAB_COUNTRIES or code == INDIA_CODE
 
 # ============================================================
 #  MAXMIND DB
@@ -792,6 +824,11 @@ def main():
         nonlocal raw_configs, url_set, config_keys
         if not any(cfg.startswith(p) for p in ('vless://', 'trojan://', 'vmess://', 'ss://', 'ssr://', 'hysteria2://', 'hy2://')):
             return
+        # Проверяем тег на арабские/индийские признаки
+        if '#' in cfg:
+            tag = cfg.split('#', 1)[1]
+            if is_arabic_or_indian_name(tag):
+                return
         key = get_config_key(cfg)
         if key:
             if key in config_keys:
@@ -858,37 +895,49 @@ def main():
     sys.stdout.write('\n')
     sys.stdout.write(f"Рабочих конфигов: {len(alive)}\n")
 
-    if not alive:
-        sys.stdout.write("❌ Нет рабочих конфигов. Завершаем.\n")
-        return
+    # 2. Определение страны и фильтрация арабских/индийских
+    if alive:
+        sys.stdout.write(f"🌍 Определение стран и фильтрация (потоков: {COUNTRY_THREADS})...\n")
+        final_configs = []
+        with ThreadPoolExecutor(max_workers=COUNTRY_THREADS) as executor:
+            def process_country(url_ping):
+                url, ping = url_ping
+                hp = parse_host_port(url)
+                if hp:
+                    host = hp[0]
+                    country_info = get_country_info(host)
+                    if country_info:
+                        _, code = country_info
+                        if is_arabic_or_indian_country(code):
+                            # Пропускаем этот конфиг
+                            return None
+                    new_url = update_url_with_country(url, country_info)
+                    return (new_url, ping)
+                return (url, ping)
 
-    # 2. Определение страны для рабочих конфигов (параллельно)
-    sys.stdout.write(f"🌍 Определение стран (потоков: {COUNTRY_THREADS})...\n")
-    final_configs = []
-    with ThreadPoolExecutor(max_workers=COUNTRY_THREADS) as executor:
-        def process_country(url_ping):
-            url, ping = url_ping
-            hp = parse_host_port(url)
-            if hp:
-                host = hp[0]
-                country_info = get_country_info(host)
-                new_url = update_url_with_country(url, country_info)
-                return (new_url, ping)
-            return (url, ping)
-        futures = {executor.submit(process_country, item): item for item in alive}
-        done = 0
-        total_c = len(alive)
-        for future in as_completed(futures):
-            done += 1
-            sys.stdout.write(f"\rСтраны | {done}/{total_c}")
-            sys.stdout.flush()
-            final_configs.append(future.result())
-    sys.stdout.write('\n')
-    sys.stdout.write(f"Определены страны для {len(final_configs)} конфигов\n")
+            futures = {executor.submit(process_country, item): item for item in alive}
+            done = 0
+            total_c = len(alive)
+            for future in as_completed(futures):
+                done += 1
+                sys.stdout.write(f"\rСтраны и фильтр | {done}/{total_c}")
+                sys.stdout.flush()
+                result = future.result()
+                if result is not None:
+                    final_configs.append(result)
+        sys.stdout.write('\n')
+        sys.stdout.write(f"После фильтрации осталось: {len(final_configs)} конфигов\n")
+    else:
+        final_configs = []
+        sys.stdout.write("❌ Нет рабочих конфигов. Пропускаем определение стран.\n")
 
     # Сортируем по пингу
-    final_configs.sort(key=lambda x: x[1])
-    all_working = [url for url, _ in final_configs]
+    if final_configs:
+        final_configs.sort(key=lambda x: x[1])
+        all_working = [url for url, _ in final_configs]
+    else:
+        all_working = []
+
     top_1000 = all_working[:LIMIT]
     top_150 = all_working[:TOP_LIMIT]
 
@@ -902,9 +951,7 @@ def main():
         "#hide-settings: 1",
         ""
     ]
-    content = '\n'.join(header) + '\n'
-    for url in top_1000:
-        content += url + '\n'
+    content = '\n'.join(header) + '\n' + '\n'.join(top_1000)
     with open(CONFIG_FILE_ALL, 'w', encoding='utf-8') as f:
         f.write(content)
     sys.stdout.write(f"✅ Сохранено {len(top_1000)} конфигов в {CONFIG_FILE_ALL}\n")
@@ -917,15 +964,13 @@ def main():
         "#hide-settings: 1",
         ""
     ]
-    content_happ = '\n'.join(header_happ) + '\n'
-    for url in top_150:
-        content_happ += url + '\n'
+    content_happ = '\n'.join(header_happ) + '\n' + '\n'.join(top_150)
     with open(CONFIG_FILE_HAPP, 'w', encoding='utf-8') as f:
         f.write(content_happ)
     sys.stdout.write(f"✅ Сохранено {len(top_150)} самых быстрых конфигов в {CONFIG_FILE_HAPP}\n")
 
     # Clash YAML (первые 1000)
-    if yaml is not None:
+    if yaml is not None and top_1000:
         sys.stdout.write("Генерация Clash YAML...\n")
         clash_proxies = []
         for url in top_1000:
@@ -942,9 +987,17 @@ def main():
                 f.write(header_clash + yaml_content)
             sys.stdout.write(f"✅ Сохранено {len(clash_proxies)} прокси в {CONFIG_FILE_CLASH}\n")
         else:
-            sys.stdout.write("⚠️ Не удалось сгенерировать Clash YAML\n")
+            sys.stdout.write("⚠️ Не удалось сгенерировать Clash YAML (нет прокси для конвертации)\n")
+            with open(CONFIG_FILE_CLASH, 'w', encoding='utf-8') as f:
+                f.write(f"#profile-title: {PROFILE_TITLE_CLASH}\n#support-url: {SUPPORT_URL}\n")
     else:
-        sys.stdout.write("⚠️ PyYAML не установлен. Clash YAML не создан.\n")
+        # Если нет конфигов или yaml не установлен, создаём пустой файл с заголовком
+        with open(CONFIG_FILE_CLASH, 'w', encoding='utf-8') as f:
+            f.write(f"#profile-title: {PROFILE_TITLE_CLASH}\n#support-url: {SUPPORT_URL}\n")
+        if yaml is None:
+            sys.stdout.write("⚠️ PyYAML не установлен. Clash YAML не создан.\n")
+        else:
+            sys.stdout.write("⚠️ Нет конфигов для Clash. Создан пустой YAML.\n")
 
     # Лог
     log_path = os.path.join(BASE_DIR, LOG_FILE)
