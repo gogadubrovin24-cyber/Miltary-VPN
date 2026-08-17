@@ -57,11 +57,13 @@ SOURCES_MAIN = [
     "https://github.com/FLAT447/v2ray-lists/raw/refs/heads/main/BLACK_FULL.txt",
     "https://github.com/FLAT447/v2ray-lists/raw/refs/heads/main/WHITE_FULL.txt",
     "https://raw.githubusercontent.com/ebrasha/free-v2ray-public-list/refs/heads/main/V2Ray-Config-By-EbraSha-All-Type.txt",
-    "https://raw.githubusercontent.com/Laouen/FreeV2rayVpn/master/all",
-    "https://raw.githubusercontent.com/alanbobs999/TopFreeProxies/master/Eternity",
-    "https://raw.githubusercontent.com/Pawdroid/Free-servers/main/sub",
-    "https://raw.githubusercontent.com/shipt/FreeV2Ray/main/v2ray",
-    "https://raw.githubusercontent.com/baranvpn/V2Ray-Configs/main/All_Configs.txt",
+    "https://alley.serv00.net/whitelist",
+    "https://alley.serv00.net/other",
+    "https://alley.serv00.net/youtube",
+    "https://gitverse.ru/api/repos/RKP_channel/RKP_bypass_configs/raw/branch/master/whitelist.txt",
+    "https://raw.githubusercontent.com/RKPchannel/RKP_bypass_configs/refs/heads/main/blacklist.txt",
+    "https://subrostunnel.vercel.app/gen.txt",
+    "https://rostunnel.vercel.app/mega.txt",
 ]
 
 SOURCES_HAPP_CRYPT = []
@@ -72,14 +74,14 @@ SOURCES_INCY_ADD = []
 SOURCES = SOURCES_MAIN + SOURCES_HAPP_CRYPT + SOURCES_INCY_CRYPT + SOURCES_HAPP_ADD + SOURCES_INCY_ADD
 
 # ===================== НАСТРОЙКИ =====================
-CHECK_TIMEOUT = 10
+CHECK_TIMEOUT = 15
 TOP_LIMIT = 150          # для Happ
 LIMIT = 1000             # для основного и Clash файлов
 
 # ===================== НАСТРОЙКИ ПОТОКОВ =====================
-LOAD_THREADS = 50        # потоки для загрузки источников
-CHECK_THREADS = 50       # потоки для проверки конфигов
-COUNTRY_THREADS = 20     # потоки для определения страны (ВОЗВРАЩЕНЫ)
+LOAD_THREADS = 100        # потоки для загрузки источников
+CHECK_THREADS = 100000    # потоки для проверки конфигов
+COUNTRY_THREADS = 100000  # потоки для определения страны (ВОЗВРАЩЕНЫ)
 
 CONFIG_FILE_ALL = "MiltaryVPN.txt"
 CONFIG_FILE_HAPP = "MiltaryVPN_Happ.txt"
